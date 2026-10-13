@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Crosshair, Minus, Plus, Trash2 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/checkbox";
 import { Input, Select } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { clampBox, pdfBoxToScreen, round1, screenBoxToPdf } from "@/lib/pdf/coords";
@@ -11,10 +10,13 @@ import { DEFAULT_SIZE, orphanStamps, placeableItems, stampKey, type PlaceableIte
 import type { PdfMapping, PdfStamp } from "@/lib/forms/pdf-mapping";
 import { allFields, type FormDefinition } from "@/lib/forms/schema";
 import { cn } from "@/lib/utils";
+import { PDF_PALETTE, type PaletteEntry } from "@/lib/forms/pdf-only";
 import { PageCanvas } from "./PageCanvas";
+import { StampStyleControls } from "./StampStyleControls";
 import { usePdfDocument, type PdfSource } from "./usePdfDocument";
 
 const ITEM_DRAG = "application/x-pdf-item";
+const ELEMENT_DRAG = "application/x-pdf-element";
 const KIND_LABEL = {
   text: "טקסט",
   check: "X",
@@ -35,9 +37,14 @@ export interface PdfPlacementProps {
   /** Optional server-side preview with sample data. */
   onPreview?: () => void;
   previewBusy?: boolean;
+  /**
+   * Draw-on-PDF mode: dropping a palette element creates a form field and a stamp.
+   * Returns the new stamp id so it can be selected.
+   */
+  onDrawElement?: (entry: PaletteEntry, page: number, at: { x: number; y: number }) => string;
 }
 
-export function PdfPlacement({ definition, source, pages, mapping, onMappingChange, onPreview, previewBusy }: PdfPlacementProps) {
+export function PdfPlacement({ definition, source, pages, mapping, onMappingChange, onPreview, previewBusy, onDrawElement }: PdfPlacementProps) {
   const { doc, error } = usePdfDocument(source);
   const [scale, setScale] = useState(1);
   const [selected, setSelected] = useState<string | null>(null);
@@ -80,6 +87,15 @@ export function PdfPlacement({ definition, source, pages, mapping, onMappingChan
     if (stamp.whenValue === undefined) delete stamp.whenValue;
     setStamps([...mapping.stamps, stamp]);
     setSelected(stamp.id);
+  }
+
+  function draw(entry: PaletteEntry, page: number, at?: { x: number; y: number }) {
+    if (!onDrawElement) return;
+    const dims = entry.size ?? DEFAULT_SIZE[entry.stamp.kind];
+    const pg = pages[page]!;
+    const pos = at ?? { x: (pg.width - dims.width) / 2, y: pg.height / 2 };
+    const box = clampBox({ ...pos, ...dims }, pg.width, pg.height);
+    setSelected(onDrawElement(entry, page, { x: round1(box.x), y: round1(box.y) }));
   }
 
   function startDrag(e: React.PointerEvent, stamp: PdfStamp, mode: "move" | "resize") {
@@ -132,6 +148,24 @@ export function PdfPlacement({ definition, source, pages, mapping, onMappingChan
       {/* Fields to place */}
       <aside className="space-y-3 lg:max-h-[75vh] lg:overflow-auto" aria-label="שדות למיקום">
         <p className="text-xs text-muted-foreground">לחצו על &quot;מיקום&quot; או גררו שדה אל העמוד. פריט מסומן ב-✓ כבר ממוקם.</p>
+        {onDrawElement && (
+          <section aria-label="הוספה על המסמך">
+            <h4 className="mb-1 text-xs font-semibold text-muted-foreground">הוספת שדה על המסמך</h4>
+            <ul className="grid grid-cols-2 gap-1">
+              {PDF_PALETTE.map((entry) => (
+                <li
+                  key={entry.id}
+                  draggable
+                  onDragStart={(e) => e.dataTransfer.setData(ELEMENT_DRAG, entry.id)}
+                  className="flex items-center justify-between gap-1 rounded-md border bg-card px-2 py-1 text-xs"
+                >
+                  <span className="truncate">{entry.label}</span>
+                  <Button variant="ghost" size="sm" aria-label={`הוספת ${entry.label}`} onClick={() => draw(entry, activePage)}><Plus className="size-3" /></Button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {tables.map((t) => {
           const current = rowsFor(t);
           const max = Number(t.settings?.maxRows ?? 20);
@@ -200,6 +234,14 @@ export function PdfPlacement({ definition, source, pages, mapping, onMappingChan
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault();
+                  const entry = PDF_PALETTE.find((p) => p.id === e.dataTransfer.getData(ELEMENT_DRAG));
+                  if (entry) {
+                    const r = pageRefs.current[pi]!.getBoundingClientRect();
+                    const d = entry.size ?? DEFAULT_SIZE[entry.stamp.kind];
+                    const b = screenBoxToPdf({ x: e.clientX - r.left, y: e.clientY - r.top, width: d.width * scale, height: d.height * scale }, pg.height, scale);
+                    draw(entry, pi, { x: round1(b.x), y: round1(b.y) });
+                    return;
+                  }
                   const item = items.find((i) => i.key === e.dataTransfer.getData(ITEM_DRAG));
                   if (!item) return;
                   const rect = pageRefs.current[pi]!.getBoundingClientRect();
@@ -227,7 +269,7 @@ export function PdfPlacement({ definition, source, pages, mapping, onMappingChan
                       )}
                       style={{ left: b.x, top: b.y, width: b.width, height: b.height }}
                     >
-                      <span className="pointer-events-none block truncate px-0.5 text-primary">{s.kind === "check" ? "X" : s.fieldId}</span>
+                      <span className="pointer-events-none block truncate px-0.5 text-primary">{s.kind === "check" ? "X" : s.kind === "date_signed" ? "תאריך חתימה" : s.fieldId}</span>
                       {active && (
                         <span
                           aria-label="שינוי גודל"
@@ -264,24 +306,7 @@ export function PdfPlacement({ definition, source, pages, mapping, onMappingChan
                 </div>
               ))}
             </div>
-            {selectedStamp.kind === "text" && (
-              <>
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground">גודל גופן (ריק = אוטומטי)</Label>
-                  <Input type="number" dir="ltr" className="h-9 text-start" min={4} max={40} value={selectedStamp.fontSize ?? ""} onChange={(e) => patchStamp(selectedStamp.id, { fontSize: e.target.value ? Number(e.target.value) : undefined })} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground">יישור</Label>
-                  <Select className="h-9" value={selectedStamp.align ?? ""} onChange={(e) => patchStamp(selectedStamp.id, { align: (e.target.value || undefined) as PdfStamp["align"] })}>
-                    <option value="">אוטומטי (לפי השפה)</option><option value="right">ימין</option><option value="left">שמאל</option><option value="center">מרכז</option>
-                  </Select>
-                </div>
-                <label className="flex items-center gap-3 text-sm">
-                  <Switch checked={!!selectedStamp.multiline} onCheckedChange={(c) => patchStamp(selectedStamp.id, { multiline: c || undefined })} label="רב-שורה" />
-                  רב-שורה
-                </label>
-              </>
-            )}
+            <StampStyleControls stamp={selectedStamp} pageCount={pages.length} onPatch={(patch) => patchStamp(selectedStamp.id, patch)} />
             <div className="space-y-1">
               <Label className="text-muted-foreground">עמוד</Label>
               <Select className="h-9" value={selectedStamp.page} onChange={(e) => {

@@ -3,7 +3,7 @@ import { Badge, Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { listTemplates } from "@/server/forms-store";
-import { archiveFormAction, createFormAction, duplicateFormAction, importFormAction } from "./actions";
+import { archiveFormAction, createFormAction, createPdfFormAction, duplicateFormAction, importFormAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +20,7 @@ export default async function FormsListPage({ searchParams }: { searchParams: Pr
         <form action={createFormAction} className="flex gap-2">
           <Input name="title" placeholder="שם הטופס החדש" className="w-56" />
           <Button type="submit">טופס חדש</Button>
+          <Button type="submit" variant="outline" formAction={createPdfFormAction}>טופס מ-PDF</Button>
         </form>
       </div>
       {error && <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">הייבוא נכשל: {error === "json" ? "הקובץ אינו JSON תקין" : "הגדרת הטופס אינה תקינה"}</p>}

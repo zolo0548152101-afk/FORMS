@@ -29,14 +29,15 @@ export interface FormEditorProps {
   initialVersion: number;
   initiallyPublished: boolean;
   initialPdf: PdfState | null;
+  initialTab?: TabId;
 }
 
-export function FormEditor({ templateId, initial, initialVersion, initiallyPublished, initialPdf }: FormEditorProps) {
+export function FormEditor({ templateId, initial, initialVersion, initiallyPublished, initialPdf, initialTab = "edit" }: FormEditorProps) {
   const [def, setDef] = useState(initial);
   const [past, setPast] = useState<FormDefinition[]>([]);
   const [future, setFuture] = useState<FormDefinition[]>([]);
   const [selection, setSelection] = useState<Selection | null>({ kind: "page", index: 0 });
-  const [tab, setTab] = useState<TabId>("edit");
+  const [tab, setTab] = useState<TabId>(initialTab);
   const [save, setSave] = useState<SaveState>("saved");
   const [version, setVersion] = useState(initialVersion);
   const [published, setPublished] = useState(initiallyPublished);
@@ -222,7 +223,7 @@ export function FormEditor({ templateId, initial, initialVersion, initiallyPubli
           </div>
         )}
 
-        {tab === "pdf" && <div className="p-4"><PdfTab definition={def} pdf={pdf} onChange={setPdf} /></div>}
+        {tab === "pdf" && <div className="p-4"><PdfTab definition={def} pdf={pdf} onChange={setPdf} onDefinitionChange={commit} /></div>}
 
         {tab === "json" && (
           <div className="mx-auto max-w-4xl space-y-3 p-4">

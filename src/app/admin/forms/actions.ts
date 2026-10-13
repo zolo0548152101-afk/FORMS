@@ -10,6 +10,13 @@ export async function createFormAction(formData: FormData) {
   redirect(`/admin/forms/${id}`);
 }
 
+/** A form that starts from an uploaded PDF: opens straight on the PDF tab. */
+export async function createPdfFormAction(formData: FormData) {
+  const title = String(formData.get("title") ?? "").trim() || "טופס מ-PDF";
+  const id = await createTemplate(title, undefined, "pdf");
+  redirect(`/admin/forms/${id}?tab=pdf`);
+}
+
 export async function importFormAction(formData: FormData) {
   const raw = String(formData.get("json") ?? "");
   let parsed;

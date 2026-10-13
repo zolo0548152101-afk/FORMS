@@ -3,7 +3,9 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { PdfPlacement } from "@/components/pdf/PdfPlacement";
+import { nanoid } from "nanoid";
 import type { PdfMapping } from "@/lib/forms/pdf-mapping";
+import { addPdfOnlyElement, dropPdfOnlyField } from "@/lib/forms/pdf-only";
 import type { FormDefinition } from "@/lib/forms/schema";
 
 export interface PdfState {
@@ -11,7 +13,17 @@ export interface PdfState {
   mapping: PdfMapping;
 }
 
-export function PdfTab({ definition, pdf, onChange }: { definition: FormDefinition; pdf: PdfState | null; onChange: (p: PdfState | null) => void }) {
+export function PdfTab({
+  definition,
+  pdf,
+  onChange,
+  onDefinitionChange,
+}: {
+  definition: FormDefinition;
+  pdf: PdfState | null;
+  onChange: (p: PdfState | null) => void;
+  onDefinitionChange: (d: FormDefinition) => void;
+}) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +89,20 @@ export function PdfTab({ definition, pdf, onChange }: { definition: FormDefiniti
           source={{ url: pdf.file.url }}
           pages={pdf.file.pages}
           mapping={pdf.mapping}
-          onMappingChange={(mapping) => onChange({ ...pdf, mapping })}
+          onMappingChange={(mapping) => {
+            // Deleting a stamp of a drawn-on-PDF field also removes the field it created.
+            const kept = new Set(mapping.stamps.map((st) => st.fieldId));
+            let def = definition;
+            for (const st of pdf.mapping.stamps) if (!kept.has(st.fieldId)) def = dropPdfOnlyField(def, st.fieldId);
+            if (def !== definition) onDefinitionChange(def);
+            onChange({ ...pdf, mapping });
+          }}
+          onDrawElement={(entry, page, at) => {
+            const { definition: next, stamp } = addPdfOnlyElement(definition, entry, page, at, () => nanoid(8));
+            if (next !== definition) onDefinitionChange(next);
+            onChange({ ...pdf, mapping: { ...pdf.mapping, stamps: [...pdf.mapping.stamps, stamp] } });
+            return stamp.id;
+          }}
           onPreview={preview}
           previewBusy={previewBusy}
         />

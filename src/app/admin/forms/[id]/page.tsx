@@ -4,8 +4,9 @@ import { getEditorData, getPdfFile } from "@/server/forms-store";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditFormPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditFormPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { id } = await params;
+  const { tab } = await searchParams;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const data = await getEditorData(id);
   if (!data) notFound();
@@ -13,6 +14,7 @@ export default async function EditFormPage({ params }: { params: Promise<{ id: s
   return (
     <FormEditor
       templateId={id}
+      initialTab={tab === "pdf" ? "pdf" : "edit"}
       initial={data.version.definition}
       initialVersion={data.version.version}
       initiallyPublished={!!data.version.publishedAt}

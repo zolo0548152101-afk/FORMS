@@ -83,5 +83,6 @@ export function placeableItems(def: FormDefinition, tableRows: Record<string, nu
 /** Stamps whose field (or table column) no longer exists in the form. */
 export function orphanStamps(def: FormDefinition, stamps: PdfStamp[]): PdfStamp[] {
   const known = new Set(placeableItems(def, Object.fromEntries(allFields(def).filter((f) => f.type === "repeating_table").map((f) => [f.id, 100]))).map((i) => i.key));
-  return stamps.filter((s) => !known.has(stampKey(s)));
+  // Stamps that do not read an answer are never orphans.
+  return stamps.filter((s) => s.kind !== "date_signed" && s.kind !== "stamp_image" && !known.has(stampKey(s)));
 }

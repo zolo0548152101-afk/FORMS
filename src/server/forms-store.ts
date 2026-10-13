@@ -11,11 +11,11 @@ export async function listTemplates() {
   return db.select().from(formTemplates).orderBy(desc(formTemplates.updatedAt));
 }
 
-export async function createTemplate(title: string, definition?: FormDefinition): Promise<string> {
+export async function createTemplate(title: string, definition?: FormDefinition, kind: "web" | "pdf" | "both" = "web"): Promise<string> {
   const def = definition ?? blankForm(title);
   const [t] = await db
     .insert(formTemplates)
-    .values({ slug: `form-${nanoid(8).toLowerCase().replace(/[^a-z0-9]/g, "x")}`, title })
+    .values({ slug: `form-${nanoid(8).toLowerCase().replace(/[^a-z0-9]/g, "x")}`, title, kind })
     .returning({ id: formTemplates.id });
   await db.insert(formTemplateVersions).values({ templateId: t!.id, version: 1, definition: { ...def, title } });
   return t!.id;
